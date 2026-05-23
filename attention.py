@@ -11,8 +11,6 @@ Q = torch.randn(4, 8)  # 4 tokens, d_k=8
 K = torch.randn(4, 8)
 V = torch.randn(4, 8)
 
-out = scaled_dot_product(Q, K, V)
-print(out.shape)
 
 
 class MultiHeadAttention(nn.Module):
@@ -59,11 +57,28 @@ class MultiHeadAttention(nn.Module):
         out = self.W_o(out)
         return out
         
+class EncoderBlock(nn.Module):
+    def __init__(self, d_model, num_heads, ffn_hidden):
+        super().__init__()
+        self.attention = MultiHeadAttention(d_model, num_heads)
+        self.ffn1 = nn.Linear(d_model, ffn_hidden)   # expand
+        self.ffn2 = nn.Linear(ffn_hidden, d_model)   # compress
+        self.norm1 = nn.LayerNorm(d_model)            # after attention
+        self.norm2 = nn.LayerNorm(d_model)            # after FFN
+
+    def forward(self, x):
+        # sub-layer 1: attention + residual + norm
+        attended = self.attention(x, x, x)
+        x = self.norm1(x + attended)
         
+        # sub-layer 2: FFN + residual + norm
+        ffn_out = torch.relu(self.ffn1(x))
+        ffn_out = self.ffn2(ffn_out)
+        x = self.norm2(x + ffn_out)
         
-mha = MultiHeadAttention(d_model=8, num_heads=2)
-Q = torch.randn(4, 8)
-K = torch.randn(4, 8)
-V = torch.randn(4, 8)
-out = mha(Q, K, V)
-print(out.shape) 
+        return x
+        
+block = EncoderBlock(d_model=8, num_heads=2, ffn_hidden=32)
+x = torch.randn(4, 8)
+out = block(x)
+print(out.shape)  
